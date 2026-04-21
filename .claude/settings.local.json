@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(C:\\\\Users\\\\timeu\\\\OneDrive\\\\Documents\\\\GitHub\\\\object-tracking\\\\venv\\\\Scripts\\\\pip freeze *)",
+      "Bash(ffmpeg *)",
+      "Bash(python main.py)"
+    ]
+  }
+}

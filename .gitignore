@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# COLMAP generated outputs
+workspace/database.db
+workspace/sparse/
+workspace/dense/
+scenes/*/database.db
+scenes/*/sparse/
+scenes/*/dense/
+
+# Images and videos (large files)
+workspace/images/
+scenes/*/images/
+*.mp4
+
+# MeshLab and COLMAP binaries
+meshlab*/
+colmap-bin/
+colmap/
+*.zip
