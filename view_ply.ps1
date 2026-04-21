@@ -1,15 +1,18 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$workspace,
-    [ValidateSet("dense", "sparse")]
+    [ValidateSet("dense", "sparse", "dense_aligned", "sparse_aligned")]
     [string]$type = "dense"
 )
 
-if ($type -eq "dense") {
-    $ply = "$workspace\dense\fused.ply"
-} else {
-    $ply = "$workspace\sparse\sparse.ply"
+$map = @{
+    "dense"          = "dense\fused.ply"
+    "sparse"         = "sparse\sparse.ply"
+    "dense_aligned"  = "dense\fused_aligned.ply"
+    "sparse_aligned" = "sparse\sparse_aligned.ply"
 }
+
+$ply = "$workspace\$($map[$type])"
 
 if (-not (Test-Path $ply)) {
     Write-Error "PLY not found at: $ply"

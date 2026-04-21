@@ -112,6 +112,40 @@ python main.py --workspace .\scenes\newscene --sequential
 
 ---
 
+## Alignment (`align.py`)
+
+Aligns a point cloud to world axes so the bounding box is axis-aligned. Outputs `*_aligned.ply` and `transform.txt` next to the source PLY.
+
+```powershell
+# Align dense cloud using RANSAC (best for scenes with a floor or flat surface)
+python align.py --workspace .\scenes\panda --source dense --method ransac
+
+# Align sparse cloud using RANSAC
+python align.py --workspace .\scenes\panda --source sparse --method ransac
+
+# Align using PCA (best for compact objects with no clear flat surface)
+python align.py --workspace .\scenes\panda --source dense --method pca
+```
+
+### Alignment flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--workspace <path>` | required | Scene workspace folder |
+| `--source` | `dense` | Which PLY to align: `dense` = `fused.ply`, `sparse` = `sparse.ply` |
+| `--method` | `ransac` | `ransac`: uses dominant plane as Up. `pca`: uses smallest-variance axis as Up |
+| `--voxel-size` | `0.02` | Downsampling voxel size before plane fitting. Increase for large scenes |
+| `--ransac-threshold` | `0.02` | Max distance from plane to count as inlier |
+
+### View aligned result
+
+```powershell
+.\view_ply.ps1 -workspace .\scenes\panda -type dense_aligned
+.\view_ply.ps1 -workspace .\scenes\panda -type sparse_aligned
+```
+
+---
+
 ## Reset a Scene
 
 Delete all generated data and start fresh:
