@@ -95,6 +95,25 @@ def export_sparse_ply():
     ])
 
 
+def export_cropped_ply():
+    """
+    Export bbox-cropped sparse model (sparse/cropped/) to sparse/sparse_cropped.ply.
+    Requires crop.py --sparse-only to have been run first.
+    """
+    print("--- Exporting Cropped Sparse PLY ---")
+    crop_dir = SPARSE_DIR / "cropped"
+    if not crop_dir.exists():
+        raise FileNotFoundError(
+            f"sparse/cropped/ not found — run: python crop.py --workspace {WORKSPACE_DIR} --sparse-only"
+        )
+    run_colmap_command([
+        COLMAP_EXECUTABLE, "model_converter",
+        "--input_path",  str(crop_dir),
+        "--output_path", str(SPARSE_DIR / "sparse_cropped.ply"),
+        "--output_type", "PLY",
+    ])
+
+
 def image_undistorter():
     """
     Step 4: Undistort images using the sparse model.
@@ -144,7 +163,8 @@ if __name__ == "__main__":
     parser.add_argument("--sparse-only",  action="store_true", help="Run only sparse reconstruction (steps 1-3)")
     parser.add_argument("--dense-only",   action="store_true", help="Run only dense reconstruction (steps 4-6), assumes sparse already exists")
     parser.add_argument("--sequential",        action="store_true", help="Use sequential matcher instead of exhaustive (recommended for video)")
-    parser.add_argument("--export-sparse-ply", action="store_true", help="Export sparse point cloud to sparse/sparse.ply")
+    parser.add_argument("--export-sparse-ply",  action="store_true", help="Export sparse cloud to sparse/sparse.ply")
+    parser.add_argument("--export-cropped-ply", action="store_true", help="Export bbox-cropped sparse cloud to sparse/sparse_cropped.ply")
     args = parser.parse_args()
 
     # Override path constants with the chosen workspace
@@ -166,8 +186,9 @@ if __name__ == "__main__":
     if not IMAGES_DIR.exists():
         raise FileNotFoundError(f"images/ folder not found in workspace: {IMAGES_DIR}")
 
-    run_sparse = not args.dense_only
-    run_dense  = not args.sparse_only
+    export_only = args.export_sparse_ply and not args.sparse_only and not args.dense_only
+    run_sparse  = not args.dense_only and not export_only
+    run_dense   = not args.sparse_only and not export_only
 
     print(f"COLMAP Pipeline Started — workspace: {WORKSPACE_DIR}")
 
@@ -176,8 +197,11 @@ if __name__ == "__main__":
         feature_matching(sequential=args.sequential)
         mapper()
 
-    if args.export_sparse_ply or (run_sparse and not run_dense):
+    if args.export_sparse_ply:
         export_sparse_ply()
+
+    if args.export_cropped_ply:
+        export_cropped_ply()
 
     if run_dense:
         image_undistorter()

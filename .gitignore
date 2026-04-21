@@ -14,6 +14,7 @@ scenes/*/dense/
 # Images and videos (large files)
 workspace/images/
 scenes/*/images/
+scenes/*/dense_cropped/
 *.mp4
 
 # MeshLab and COLMAP binaries
@@ -21,3 +22,11 @@ meshlab*/
 colmap-bin/
 colmap/
 *.zip
+*.jpg
+*.json
+
+
+# Xcode
+app/objectCapture-iOS/*.xcworkspace/xcuserdata
+app/objectCapture-iOS/**/*.xcuserstate
+app/objectCapture-iOS/DerivedData/

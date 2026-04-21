@@ -1,15 +1,17 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$workspace,
-    [ValidateSet("dense", "sparse", "dense_aligned", "sparse_aligned")]
+    [ValidateSet("dense", "sparse", "dense_aligned", "sparse_aligned", "dense_cropped", "sparse_cropped")]
     [string]$type = "dense"
 )
 
 $map = @{
-    "dense"          = "dense\fused.ply"
-    "sparse"         = "sparse\sparse.ply"
-    "dense_aligned"  = "dense\fused_aligned.ply"
-    "sparse_aligned" = "sparse\sparse_aligned.ply"
+    "dense"           = "dense\fused.ply"
+    "sparse"          = "sparse\sparse.ply"
+    "dense_aligned"   = "dense\fused_aligned.ply"
+    "sparse_aligned"  = "sparse\sparse_aligned.ply"
+    "dense_cropped"   = "dense_cropped\fused.ply"
+    "sparse_cropped"  = "sparse\sparse_cropped.ply"
 }
 
 $ply = "$workspace\$($map[$type])"
