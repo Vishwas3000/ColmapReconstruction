@@ -1,5 +1,52 @@
 # COMMANDS
 
+## Quick Reference — `run.ps1`
+
+Single entry point for all pipeline operations. Activates the venv automatically.
+
+```powershell
+# AR capture — choose what to build after injecting poses
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan              # default: crop + dense_cropped
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan  --sparse       # inject only (sparse)
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan  --dense        # inject + full dense (no crop)
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan  --crop-sparse  # inject + crop sparse only
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan  --crop         # inject + crop + dense_cropped
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan  --validate  # add bbox validation step
+.\run.ps1 ar  .\session_1234\session_1234  .\scenes\myscan  --force     # re-run from scratch
+
+# Regular video/photo pipeline
+.\run.ps1 sparse  .\scenes\panda                  # sparse only
+.\run.ps1 sparse  .\scenes\panda  --sequential    # video input (use sequential matcher)
+.\run.ps1 dense   .\scenes\panda                  # dense from existing sparse
+
+# Bounding box crop + dense (AR scenes, after ar or inject)
+.\run.ps1 crop  .\scenes\myscan
+
+# View result in MeshLab (auto-detects best available PLY)
+.\run.ps1 view  .\scenes\myscan
+.\run.ps1 view  .\scenes\myscan  dense_cropped    # explicit type
+
+# Validate bounding box alignment
+.\run.ps1 validate  .\scenes\myscan
+```
+
+| `run.ps1` command | Steps |
+|---|---|
+| `ar <session> <workspace>` | inject_poses → crop → dense_cropped (default) |
+| `ar ... --sparse` | inject_poses only |
+| `ar ... --dense` | inject_poses → dense (full scene, no crop) |
+| `ar ... --crop-sparse` | inject_poses → crop sparse only |
+| `ar ... --crop` | inject_poses → crop → dense_cropped |
+| `sparse <workspace>` | feature extraction → matching → SfM |
+| `dense <workspace>` | undistort → depth maps → fusion |
+| `crop <workspace>` | bbox crop → undistort → depth maps → fusion |
+| `view <workspace> [type]` | open PLY in MeshLab |
+| `validate <workspace>` | show bbox vs point cloud in Open3D |
+
+View types: `sparse` `dense` `sparse_cropped` `dense_cropped` `sparse_aligned` `dense_aligned`
+
+---
+
 ## Frame Extraction
 
 Extract frames from a video into a workspace's `images/` folder.

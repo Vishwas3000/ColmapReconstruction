@@ -36,7 +36,7 @@ def arkit_to_colmap(c2w: np.ndarray) -> np.ndarray:
     COLMAP World-to-Camera (Y-down, +Z forward).
 
     Steps:
-      1. Flip Y and Z axes (ARKit → OpenCV/COLMAP sensor convention)
+      1. Flip Y and Z axes (ARKit -> OpenCV/COLMAP sensor convention)
       2. Invert to get World-to-Camera
     """
     flip = np.diag([1.0, -1.0, -1.0, 1.0])
@@ -248,16 +248,19 @@ def main():
         "--image_path",    str(images_dir),
         "--input_path",    str(known_dir),
         "--output_path",   str(out_dir),
+        # Minimal BA — 1 iteration won't drift injected ARKit poses meaningfully.
+        "--Mapper.ba_global_max_num_iterations", "1",
+        "--Mapper.ba_local_max_num_iterations",  "1",
     ], check=True)
 
-    print(f"\nDone. Sparse model with AR poses → {out_dir}")
+    print(f"\nDone. Sparse model with AR poses -> {out_dir}")
     print(f"Run dense reconstruction:")
     print(f"  python main.py --workspace {workspace} --dense-only")
 
     # ── 7. Copy bounds.json ───────────────────────────────────────────────────
     if bounds_file.exists():
         shutil.copy2(bounds_file, workspace / "bounds.json")
-        print(f"Copied bounds.json → {workspace / 'bounds.json'}")
+        print(f"Copied bounds.json -> {workspace / 'bounds.json'}")
 
 
 if __name__ == "__main__":

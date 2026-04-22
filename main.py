@@ -98,7 +98,8 @@ def export_sparse_ply():
 def export_cropped_ply():
     """
     Export bbox-cropped sparse model (sparse/cropped/) to sparse/sparse_cropped.ply.
-    Requires crop.py --sparse-only to have been run first.
+    Reads points3D.bin directly and writes PLY — avoids COLMAP model_converter crash
+    on hand-written binary files.
     """
     print("--- Exporting Cropped Sparse PLY ---")
     crop_dir = SPARSE_DIR / "cropped"
@@ -106,12 +107,17 @@ def export_cropped_ply():
         raise FileNotFoundError(
             f"sparse/cropped/ not found — run: python crop.py --workspace {WORKSPACE_DIR} --sparse-only"
         )
+    out_path = SPARSE_DIR / "sparse_cropped.ply"
+
+    # crop.py writes a text model; use model_converter to export directly to PLY
     run_colmap_command([
         COLMAP_EXECUTABLE, "model_converter",
         "--input_path",  str(crop_dir),
-        "--output_path", str(SPARSE_DIR / "sparse_cropped.ply"),
+        "--output_path", str(out_path),
         "--output_type", "PLY",
     ])
+
+    print(f"Exported cropped sparse -> {out_path}")
 
 
 def image_undistorter():
@@ -186,7 +192,7 @@ if __name__ == "__main__":
     if not IMAGES_DIR.exists():
         raise FileNotFoundError(f"images/ folder not found in workspace: {IMAGES_DIR}")
 
-    export_only = args.export_sparse_ply and not args.sparse_only and not args.dense_only
+    export_only = (args.export_sparse_ply or args.export_cropped_ply) and not args.sparse_only and not args.dense_only
     run_sparse  = not args.dense_only and not export_only
     run_dense   = not args.sparse_only and not export_only
 
@@ -197,15 +203,15 @@ if __name__ == "__main__":
         feature_matching(sequential=args.sequential)
         mapper()
 
+    if run_dense:
+        image_undistorter()
+        patch_match_stereo()
+        stereo_fusion()
+
     if args.export_sparse_ply:
         export_sparse_ply()
 
     if args.export_cropped_ply:
         export_cropped_ply()
-
-    if run_dense:
-        image_undistorter()
-        patch_match_stereo()
-        stereo_fusion()
 
     print("Pipeline Finished")

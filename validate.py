@@ -82,8 +82,9 @@ def points_inside_box(xyzs: np.ndarray, bounds: dict) -> np.ndarray:
     R       = bounds["R"]
 
     # Translate then rotate into box-local frame.
-    # R columns = box axes in world space → R.T rotates world→box.
-    local = (xyzs - center) @ R.T   # (N,3)
+    # R columns = box axes in world space.
+    # For row vectors: world→local = v @ R  (equiv to R.T @ v for column vectors)
+    local = (xyzs - center) @ R   # (N,3)
 
     half = extents / 2.0
     mask = (

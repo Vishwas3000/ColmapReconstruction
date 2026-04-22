@@ -29,6 +29,13 @@ os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = \
 # Number of intrinsic params per COLMAP camera model ID
 _MODEL_PARAMS = {0: 3, 1: 4, 2: 4, 3: 5, 4: 8, 5: 8, 6: 12, 7: 5, 8: 3, 9: 4, 10: 12}
 
+# Model ID -> name string for text format
+_MODEL_NAMES = {
+    0: "SIMPLE_PINHOLE", 1: "PINHOLE", 2: "SIMPLE_RADIAL", 3: "RADIAL",
+    4: "OPENCV", 5: "OPENCV_FISHEYE", 6: "FULL_OPENCV", 7: "FOV",
+    8: "SIMPLE_RADIAL_FISHEYE", 9: "RADIAL_FISHEYE", 10: "THIN_PRISM_FISHEYE",
+}
+
 
 # ─── Binary readers ───────────────────────────────────────────────────────────
 
@@ -91,46 +98,44 @@ def read_points3D_bin(path: Path) -> dict:
     return pts
 
 
-# ─── Binary writers ───────────────────────────────────────────────────────────
+# ─── Text writers (COLMAP reads text models reliably; avoids binary format issues) ─
 
-def write_cameras_bin(path: Path, cameras: dict):
-    with open(path, "wb") as f:
-        f.write(struct.pack("<Q", len(cameras)))
+def write_cameras_txt(path: Path, cameras: dict):
+    with open(path, "w") as f:
+        f.write("# Camera list\n# CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n")
         for cam in cameras.values():
-            np_ = len(cam["params"])
-            f.write(struct.pack("<I",       cam["id"]))
-            f.write(struct.pack("<i",       cam["model_id"]))
-            f.write(struct.pack("<Q",       cam["width"]))
-            f.write(struct.pack("<Q",       cam["height"]))
-            f.write(struct.pack(f"<{np_}d", *cam["params"]))
+            name   = _MODEL_NAMES.get(cam["model_id"], str(cam["model_id"]))
+            params = " ".join(f"{p:.10f}" for p in cam["params"])
+            f.write(f"{cam['id']} {name} {cam['width']} {cam['height']} {params}\n")
 
 
-def write_images_bin(path: Path, images: dict):
-    with open(path, "wb") as f:
-        f.write(struct.pack("<Q", len(images)))
+def write_images_txt(path: Path, images: dict):
+    with open(path, "w") as f:
+        f.write("# Image list\n"
+                "# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n"
+                "# POINTS2D[] as (X, Y, POINT3D_ID)\n")
         for img in images.values():
-            f.write(struct.pack("<I",  img["id"]))
-            f.write(struct.pack("<4d", *img["qvec"]))
-            f.write(struct.pack("<3d", *img["tvec"]))
-            f.write(struct.pack("<I",  img["camera_id"]))
-            f.write(img["name"].encode() + b"\x00")
-            f.write(struct.pack("<Q", len(img["xys"])))
-            for (x, y), p3d_id in zip(img["xys"], img["point3D_ids"]):
-                f.write(struct.pack("<2d", x, y))
-                f.write(struct.pack("<q",  p3d_id))
+            qw, qx, qy, qz = img["qvec"]
+            tx, ty, tz      = img["tvec"]
+            f.write(f"{img['id']} {qw:.10f} {qx:.10f} {qy:.10f} {qz:.10f} "
+                    f"{tx:.10f} {ty:.10f} {tz:.10f} {img['camera_id']} {img['name']}\n")
+            pts = " ".join(
+                f"{x:.4f} {y:.4f} {pid}"
+                for (x, y), pid in zip(img["xys"], img["point3D_ids"])
+            )
+            f.write((pts if pts else "") + "\n")
 
 
-def write_points3D_bin(path: Path, points: dict):
-    with open(path, "wb") as f:
-        f.write(struct.pack("<Q", len(points)))
+def write_points3D_txt(path: Path, points: dict):
+    with open(path, "w") as f:
+        f.write("# 3D point list\n"
+                "# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n")
         for pt in points.values():
-            f.write(struct.pack("<Q",  pt["id"]))
-            f.write(struct.pack("<3d", *pt["xyz"]))
-            f.write(struct.pack("<3B", *pt["rgb"]))
-            f.write(struct.pack("<d",  pt["error"]))
-            f.write(struct.pack("<Q",  len(pt["track"])))
-            for img_id, p2d_idx in pt["track"]:
-                f.write(struct.pack("<2I", img_id, p2d_idx))
+            x, y, z = pt["xyz"]
+            r, g, b = pt["rgb"]
+            track   = " ".join(f"{iid} {idx}" for iid, idx in pt["track"])
+            f.write(f"{pt['id']} {x:.10f} {y:.10f} {z:.10f} "
+                    f"{r} {g} {b} {pt['error']:.10f} {track}\n")
 
 
 # ─── Bounding box ─────────────────────────────────────────────────────────────
@@ -147,7 +152,9 @@ def load_bounds(path: Path) -> dict:
 
 def inside_box(xyz_array: np.ndarray, bounds: dict) -> np.ndarray:
     c, e, R = bounds["center"], bounds["extents"], bounds["R"]
-    local = (xyz_array - c) @ R.T
+    # R columns = box axes in world space.
+    # For row vectors: world->local = v @ R  (equiv to R.T @ v for column vectors)
+    local = (xyz_array - c) @ R
     half  = e / 2.0
     return (
         (np.abs(local[:, 0]) <= half[0]) &
@@ -169,11 +176,12 @@ def main():
                         help="Min inside-box point observations to keep an image (default 2)")
     args = parser.parse_args()
 
-    workspace  = Path(args.workspace)
-    sparse_dir = workspace / "sparse" / "0"
-    crop_dir   = workspace / "sparse" / "cropped"
-    dense_dir  = workspace / "dense_cropped"
-    images_dir = workspace / "images"
+    workspace    = Path(args.workspace).resolve()   # absolute — COLMAP needs absolute paths
+    sparse_dir   = workspace / "sparse" / "0"
+    crop_dir     = workspace / "sparse" / "cropped"       # text model (our writer)
+    crop_bin_dir = workspace / "sparse" / "cropped_bin"   # binary model (COLMAP-converted)
+    dense_dir    = workspace / "dense_cropped"
+    images_dir   = workspace / "images"
 
     # ── 1. Crop sparse model ──────────────────────────────────────────────────
     if not args.dense_only:
@@ -219,14 +227,36 @@ def main():
             for img in kept_images.values()
         }
 
-        # Write cropped binary model
-        crop_dir.mkdir(parents=True, exist_ok=True)
-        write_cameras_bin( crop_dir / "cameras.bin",  kept_cameras)
-        write_images_bin(  crop_dir / "images.bin",   kept_images)
-        write_points3D_bin(crop_dir / "points3D.bin", kept_points)
+        # Filter point tracks to only reference kept images (avoids COLMAP errors)
+        kept_image_ids = set(kept_images.keys())
+        for pid in list(kept_points.keys()):
+            pt = kept_points[pid]
+            kept_points[pid] = {
+                **pt,
+                "track": [(iid, idx) for iid, idx in pt["track"] if iid in kept_image_ids]
+            }
 
-        print(f"\nCropped model → {crop_dir}")
+        # Write cropped model as text — COLMAP reads text models reliably.
+        # Remove any stale .bin files first; COLMAP prefers binary and would use those instead.
+        crop_dir.mkdir(parents=True, exist_ok=True)
+        for stale in ("cameras.bin", "images.bin", "points3D.bin"):
+            (crop_dir / stale).unlink(missing_ok=True)
+        write_cameras_txt( crop_dir / "cameras.txt",  kept_cameras)
+        write_images_txt(  crop_dir / "images.txt",   kept_images)
+        write_points3D_txt(crop_dir / "points3D.txt", kept_points)
+
+        print(f"\nCropped model (text) -> {crop_dir}")
         print(f"  {len(kept_cameras)} cameras | {len(kept_images)} images | {len(kept_points):,} points")
+
+        # Convert text model to COLMAP binary so image_undistorter doesn't crash.
+        # COLMAP's text parser has a buffer overrun on long keypoint lines.
+        crop_bin_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run([
+            COLMAP, "model_converter",
+            "--input_path",  str(crop_dir),
+            "--output_path", str(crop_bin_dir),
+            "--output_type", "BIN",
+        ], check=True)
 
         if args.sparse_only:
             print("\nSparse crop done. To run dense later:")
@@ -239,7 +269,7 @@ def main():
     subprocess.run([
         COLMAP, "image_undistorter",
         "--image_path",  str(images_dir),
-        "--input_path",  str(crop_dir),
+        "--input_path",  str(crop_bin_dir),   # use COLMAP-written binary
         "--output_path", str(dense_dir),
         "--output_type", "COLMAP",
     ], check=True)
@@ -277,8 +307,8 @@ def main():
     clipped = pcd.select_by_index(np.where(mask)[0])
     o3d.io.write_point_cloud(str(dense_dir / "fused.ply"), clipped)
 
-    print(f"  {n_before:,} → {n_after:,} points  ({100*n_after/max(n_before,1):.1f}% kept)")
-    print(f"\nDone — dense cloud → {dense_dir / 'fused.ply'}")
+    print(f"  {n_before:,} -> {n_after:,} points  ({100*n_after/max(n_before,1):.1f}% kept)")
+    print(f"\nDone — dense cloud -> {dense_dir / 'fused.ply'}")
     print(f"Open: .\\view_ply.ps1 -workspace {workspace} -type dense_cropped")
 
 
